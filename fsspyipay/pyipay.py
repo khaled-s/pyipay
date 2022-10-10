@@ -8,7 +8,7 @@ from .util import Action
 from .util import decrypt_payload as decrypt
 from .util import encrypt_payload as encrypt
 from .util import read_resource_file, sanitize, validate_gw_url
-from .util import check_if_set, LANG_LOOKUP
+from .util import LANG_LOOKUP
 
 from .exceptions import InvalidGatewayResponse
 
@@ -55,7 +55,7 @@ class Gateway:
 
        :Example:
 
-       >>> from fsspyipay import Gateway
+       >>> from pyipay import Gateway
        >>> resource_file = r'/home/me/resource.cgn'
        >>> keystore_file = r'/home/me/keystore.bin'
        >>> gw = Gateway(keystore_file, resource_file, 'alias', 4.546)
@@ -93,6 +93,8 @@ class Gateway:
         if tracking_id is None:
             now = int(time.time())
             self.tracking_id = f"{now}"
+        else:
+            self.tracking_id = tracking_id
 
         # Setting these as private, since we will manipulate the values
         # and sanitize them before setting the final value
@@ -191,7 +193,7 @@ class Gateway:
 
     def _build_payload(self, action):
         params = self._build_param_dict(action.value)
-
+        
         # filter out empty values, and set `safe` to avoid
         # encoding URLs, which is not supported by the platform.
         d = parse.urlencode({k: v for k, v in params.items() if v}, safe=":/")
@@ -200,14 +202,14 @@ class Gateway:
         return payload.decode("utf-8")
 
     def _get_redirect_url(self, action):
-        payload = self._build_payload(action.value)
+        payload = self._build_payload(action)
         pgw_url = self._pgw_url
         gw_url = f"{pgw_url}/PaymentHTTP.htm?param=paymentInit&trandata={payload}"
         gw_url = f"{gw_url}&tranportalId={self.portal_id}&responseURL={self.response_url}&errorURL={self.error_url}"
         return gw_url
 
     def _parse_response(self, raw_response):
-        results = parse.parse_qs(raw_response)
+        results = raw_response
         try:
             encrypted_payload = results.pop("trandata")
         except KeyError:
@@ -217,13 +219,14 @@ class Gateway:
 
     def get_result(self, response):
         common, decrypted = self._parse_response(response)
-        d = {k: v[0] for k, v in common.items()}
+        d = {k: v for k, v in common.items()}
         for k, v in decrypted.items():
-            if k not in d:
-                d[k] = v[0]
+            d[k] = v[0]
         return d
 
-    @check_if_set(['response_url', 'error_url'])
     def generate_purchase_request(self):
-        redirect_to = self._get_redirect_url(Action.PURCHASE)
-        return redirect_to
+        if all(getattr(self, i) for i in ["error_url", "response_url"]):
+            redirect_to = self._get_redirect_url(Action.PURCHASE)
+            return redirect_to
+        else:
+            raise AttributeError("reponse_url and error_url are required to be set before generate_purchase_request can be called")

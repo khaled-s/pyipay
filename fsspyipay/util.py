@@ -46,8 +46,7 @@ def sanitize(text):
        
        :returns: the passed in value, translated by removing `FILTER_CHARS`
     """
-    return text.strip().translate(None, FILTER_CHARS)
-
+    return text.strip().translate(str.maketrans('','',FILTER_CHARS))
 
 def load_keystore(keystore_path, key_name="pgkey", passphrase="password"):
     """Loads the keystore and extracts the `pgkey` value.
